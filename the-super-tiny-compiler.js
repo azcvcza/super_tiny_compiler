@@ -163,3 +163,95 @@ function traverser(ast,visitor){
     }
     traverseNode(ast,null)
 }//end traverser
+
+function transformer(ast){
+    let newAst = {
+        type:'Program',
+        body:[],
+    };
+
+    ast._context = newAst.body;
+    
+    traverser(ast,{
+        NumberLiteral:{
+            enter(node,parent){
+                parent._context.push({
+                    type:'NumberLiteral',
+                    value:node.value,
+                });
+            },
+        },
+        StringLiteral:{
+            enter(node,parent){
+                parent._context.push({
+                    type:'StringLiteral',
+                    value:node.value,
+                });
+            },
+        },
+        CallExpression:{
+            enter(node,parent){
+                let expression = {
+                    type:'CallExpression',
+                    callee:{
+                        type:'Identifier',
+                        name:node.name,
+                    },
+                    arguments:[],
+                };
+                node._context = expression.arguments;
+                if(parent.type!=="CallExpression"){
+                    expression = {
+                        type:'ExpressionStatement',
+                        expression:expression,
+                    };
+                }
+                parent._context.push(expression);
+            }
+            
+        },
+    });
+    return newAst;
+}//end transformer
+
+function codeGenerator(node){
+    switch(node.type){
+        case 'Program':
+            return node.body.map(codeGenerator).join('\n');
+        
+        case 'ExpressionStatement':
+            return (codeGenerator(node.expression)+";");
+        case 'CallExpression':
+            return (codeGenerator(node.callee+"("+node.arguments.map(codeGenerator).join(', ')+")"));
+        
+        case 'Identifier':
+            return node.name;
+        case 'NumberLiteral':
+            return node.value;
+        
+        case 'StringLiteral':
+            return '"'+node.value+'"';
+        
+        default:
+            throw new TypeError(node.type);
+    }
+}//end codeGen
+
+function compiler(input){
+    let tokens = tokenizer(input);
+    let ast = parser(tokens);
+    let newAst = transformer(ast);
+    let output = codeGenerator(newAst);
+
+    return output;
+}//end compiler
+
+module.exports = {
+    tokenizer,
+    parser,
+    traverser,
+    transformer,
+    codeGenerator,
+    compiler,
+}
+
